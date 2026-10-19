@@ -10,7 +10,7 @@ import joblib
 import requests
 import numpy as np
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 from backend.app.config import settings
 from backend.app.data.coimbatore_wards import get_all_coimbatore_wards
@@ -168,7 +168,7 @@ class WeatherInferenceService:
                 "longitude": target_lon,
                 "elevation_m": elevation_val,
                 "mapped_ward": mapped_ward_info,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "fetch_latency_ms": latency_ms,
                 "current_temperature_c": cur_temp,
                 "current_relative_humidity": cur_hum,
@@ -193,7 +193,7 @@ class WeatherInferenceService:
                 "longitude": target_lon,
                 "elevation_m": target_w["elevation_mean_m"] if target_w else 431.0,
                 "mapped_ward": mapped_ward_info,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "fetch_latency_ms": 12,
                 "current_temperature_c": 24.5,
                 "current_relative_humidity": 84.0,
@@ -265,7 +265,7 @@ class WeatherInferenceService:
             hit = green_cache.get(cache_key)
             if hit is not None:
                 cached_data, lookup_latency_ms = hit
-                cached_data["execution_timestamp"] = datetime.utcnow().isoformat()
+                cached_data["execution_timestamp"] = datetime.now(timezone.utc).isoformat()
                 if weather is not None:
                     cached_data["telemetry"] = weather
                 cached_data["green_computing"] = {
@@ -360,7 +360,7 @@ class WeatherInferenceService:
         ward_results_sorted = sorted(ward_results, key=lambda x: x["calibrated_probability"], reverse=True)
 
         result_payload = {
-            "execution_timestamp": datetime.utcnow().isoformat(),
+            "execution_timestamp": datetime.now(timezone.utc).isoformat(),
             "telemetry": weather,
             "simulated_rain_override": override_rain_24h is not None,
             "applied_rain_24h_mm": rain_24h,
