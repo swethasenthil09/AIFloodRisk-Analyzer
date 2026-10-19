@@ -291,6 +291,29 @@ def manual_predict(req: ManualPredictRequest):
     drain_dist = float(req.drainage_distance_m) if req.drainage_distance_m is not None else (target_w["drainage_distance_m"] if target_w else 320.0)
     drain_cap = float(req.drainage_cap_mmhr) if req.drainage_cap_mmhr is not None else (target_w["baseline_drainage_capacity_mmhr"] if target_w else 35.0)
 
+    from backend.app.services.green_cache import green_cache
+    import time
+
+    cache_params = {
+        "rain_1d": rain_1d, "rain_3d": rain_3d, "rain_7d": rain_7d,
+        "api": api, "soil_moisture": soil_moist, "elev": elev,
+        "hand": hand, "twi": twi, "slope": slope, "drain_dist": drain_dist,
+        "drain_cap": drain_cap, "ward_id": str(req.ward_id).upper() if req.ward_id else None
+    }
+    cache_key = green_cache.generate_key("manual_single", cache_params)
+    hit = green_cache.get(cache_key)
+    if hit is not None:
+        cached_data, lookup_latency_ms = hit
+        cached_data["green_computing"] = {
+            "cached": True,
+            "cache_hit": True,
+            "inference_skipped": True,
+            "inferences_avoided": 1,
+            "lookup_latency_ms": lookup_latency_ms,
+            "cache_key_prefix": cache_key[:12]
+        }
+        return cached_data
+
     feature_cols = [
         "rain_1d_mm", "rain_3d_mm", "rain_7d_mm", "api_mm", "soil_moisture",
         "elevation_m", "hand_m", "twi", "slope_deg", "drainage_distance_m", "drainage_cap_mmhr"
@@ -309,10 +332,14 @@ def manual_predict(req: ManualPredictRequest):
         "drainage_cap_mmhr": drain_cap
     }])[feature_cols]
 
+    t0_infer = time.perf_counter()
     if inference_service.model is not None:
         prob = float(inference_service.model.predict_proba(input_data)[0, 1])
     else:
         prob = float(np.clip((rain_1d + api * 0.2) / 140.0, 0.05, 0.98))
+    infer_latency_ms = round((time.perf_counter() - t0_infer) * 1000, 3)
+
+    green_cache.record_execution(inferences_count=1, latency_ms=infer_latency_ms)
 
     prob = round(prob, 4)
     if prob >= 0.80:
@@ -344,7 +371,7 @@ def manual_predict(req: ManualPredictRequest):
     if api >= 35.0:
         contributing_factors.append(f"Saturated subsoil from antecedent rain (API = {api}mm)")
 
-    return {
+    result_payload = {
         "status": "success",
         "inputs": {
             "rain_1d_mm": rain_1d,
@@ -377,6 +404,19 @@ def manual_predict(req: ManualPredictRequest):
         },
         "contributing_factors": contributing_factors
     }
+
+    green_cache.set(cache_key, result_payload, model_inferences_count=1, uncached_latency_ms=infer_latency_ms)
+
+    result_payload["green_computing"] = {
+        "cached": False,
+        "cache_hit": False,
+        "inference_skipped": False,
+        "inferences_executed": 1,
+        "inference_latency_ms": infer_latency_ms,
+        "cache_key_prefix": cache_key[:12]
+    }
+
+    return result_payload
 
 @router.get("/ward-train-test-comparison")
 def get_ward_train_test_comparison(ward_id: Optional[str] = Query(None, description="Optional target ward ID e.g. WARD_053")):

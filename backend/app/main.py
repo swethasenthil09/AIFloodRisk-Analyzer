@@ -25,6 +25,7 @@ from backend.app.routers.subscriptions import router as subscriptions_router
 from backend.app.routers.sar import router as sar_router
 from backend.app.routers.weather import router as weather_router
 from backend.app.routers.analyzer import router as analyzer_router
+from backend.app.routers.green import router as green_router
 
 def init_database_data():
     """Initializes tables and seeds 100 Coimbatore wards and initial demo subscriptions."""
@@ -122,6 +123,7 @@ app.include_router(subscriptions_router)
 app.include_router(sar_router)
 app.include_router(weather_router)
 app.include_router(analyzer_router)
+app.include_router(green_router)
 
 @app.get("/")
 def root():
@@ -139,6 +141,8 @@ def root():
             "alerts": "/api/alerts",
             "subscriptions": "/api/subscriptions",
             "sar_analysis": "/api/sar/latest",
-            "live_weather": "/api/weather/live"
+            "live_weather": "/api/weather/live",
+            "green_computing_stats": "/api/green/stats",
+            "green_computing_benchmark": "/api/green/benchmark"
         }
     }

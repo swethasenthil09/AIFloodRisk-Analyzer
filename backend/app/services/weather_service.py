@@ -11,9 +11,11 @@ import requests
 import numpy as np
 import pandas as pd
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from backend.app.config import settings
 from backend.app.data.coimbatore_wards import get_all_coimbatore_wards
+
+_WEATHER_TELEMETRY_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
 
 class WeatherInferenceService:
     """Manages weather ingestion, API computation, and ward-level calibrated risk inference."""
@@ -71,6 +73,14 @@ class WeatherInferenceService:
 
         target_lat = target_w["centroid_lat"] if target_w else lat
         target_lon = target_w["centroid_lon"] if target_w else lon
+
+        # Check telemetry cache (freshness window: 60 seconds)
+        cache_key = f"{round(target_lat, 3)}_{round(target_lon, 3)}_{target_w['ward_id'] if target_w else 'default'}"
+        now_ts = time.time()
+        if cache_key in _WEATHER_TELEMETRY_CACHE:
+            cached_data, cached_at = _WEATHER_TELEMETRY_CACHE[cache_key]
+            if (now_ts - cached_at) < 60.0:
+                return json.loads(json.dumps(cached_data))
 
         url = (
             f"{settings.OPEN_METEO_BASE_URL}?"
@@ -172,9 +182,11 @@ class WeatherInferenceService:
                 "hourly_forecast_24h": hourly_24h,
                 "daily_series": daily_series
             }
+            _WEATHER_TELEMETRY_CACHE[cache_key] = (res_dict, time.time())
+            return res_dict
         except Exception as e:
             print(f"Warning: Open-Meteo live API fallback due to: {e}")
-            return {
+            fallback_dict = {
                 "source": "Coimbatore Meteorological Telemetry Cache",
                 "station_name": station_name,
                 "latitude": target_lat,
@@ -201,6 +213,8 @@ class WeatherInferenceService:
                     for i, p in enumerate([1.2, 4.5, 0.0, 8.2, 14.6, 2.1, 26.9, 30.4, 18.2, 6.0])
                 ]
             }
+            _WEATHER_TELEMETRY_CACHE[cache_key] = (fallback_dict, time.time())
+            return fallback_dict
 
     def predict_ward_risks(
         self,
@@ -208,20 +222,67 @@ class WeatherInferenceService:
         override_api_7d: Optional[float] = None,
         lat: Optional[float] = None,
         lon: Optional[float] = None,
-        ward_id: Optional[str] = None
+        ward_id: Optional[str] = None,
+        use_cache: bool = True
     ) -> Dict[str, Any]:
         """
         Executes calibrated XGBoost inference for all 100 Coimbatore wards.
-        Optionally accepts simulated rainfall overrides or targeted ward coordinates.
+        Integrates computation-aware caching to eliminate redundant tree evaluations
+        when hydrological inputs and weather conditions are unchanged.
         """
-        weather = self.fetch_live_weather(lat=lat or 11.0168, lon=lon or 76.9558, ward_id=ward_id)
-        
-        rain_24h = override_rain_24h if override_rain_24h is not None else weather["rain_24h_forecast_mm"]
-        api_7d = override_api_7d if override_api_7d is not None else weather["api_7d_mm"]
-        rain_3d = round(rain_24h * 1.5, 1) if override_rain_24h is not None else weather["rain_3d_mm"]
-        rain_7d = round(rain_24h * 2.2, 1) if override_rain_24h is not None else weather["rain_7d_mm"]
-        soil_moisture = min(0.48, round(0.24 + (rain_7d / 1000.0), 3)) if override_rain_24h is not None else weather["soil_moisture"]
+        from backend.app.services.green_cache import green_cache
+        import time
 
+        # Determine inputs & time bucket
+        if override_rain_24h is not None:
+            time_bucket = "sim_override"
+            rain_24h = float(override_rain_24h)
+            api_7d = float(override_api_7d) if override_api_7d is not None else round(rain_24h * 0.85, 1)
+            weather = None
+            rain_3d = round(rain_24h * 1.5, 1)
+            rain_7d = round(rain_24h * 2.2, 1)
+            soil_moisture = min(0.48, round(0.24 + (rain_7d / 1000.0), 3))
+        else:
+            weather = self.fetch_live_weather(lat=lat or 11.0168, lon=lon or 76.9558, ward_id=ward_id)
+            time_bucket = str(weather.get("timestamp", ""))[:13]
+            rain_24h = weather["rain_24h_forecast_mm"]
+            api_7d = weather["api_7d_mm"]
+            rain_3d = weather["rain_3d_mm"]
+            rain_7d = weather["rain_7d_mm"]
+            soil_moisture = weather["soil_moisture"]
+
+        norm_params = {
+            "rain_24h": round(float(rain_24h), 4),
+            "api_7d": round(float(api_7d), 4),
+            "simulated": override_rain_24h is not None,
+            "ward_id": str(ward_id).strip().upper() if ward_id else "CITYWIDE_100",
+            "lat": round(float(lat), 4) if lat is not None else None,
+            "lon": round(float(lon), 4) if lon is not None else None
+        }
+        cache_key = green_cache.generate_key("citywide_100wards", norm_params, time_bucket=time_bucket)
+
+        if use_cache:
+            hit = green_cache.get(cache_key)
+            if hit is not None:
+                cached_data, lookup_latency_ms = hit
+                cached_data["execution_timestamp"] = datetime.utcnow().isoformat()
+                if weather is not None:
+                    cached_data["telemetry"] = weather
+                cached_data["green_computing"] = {
+                    "cached": True,
+                    "cache_hit": True,
+                    "inference_skipped": True,
+                    "inferences_avoided": len(cached_data.get("all_wards", [])),
+                    "lookup_latency_ms": lookup_latency_ms,
+                    "cache_key_prefix": cache_key[:12]
+                }
+                return cached_data
+
+        if weather is None:
+            weather = self.fetch_live_weather(lat=lat or 11.0168, lon=lon or 76.9558, ward_id=ward_id)
+
+        # Cache miss or cache bypassed: execute actual model inference pipeline
+        t0_infer = time.perf_counter()
         wards = get_all_coimbatore_wards()
         records = []
         for w in wards:
@@ -254,6 +315,9 @@ class WeatherInferenceService:
         else:
             # Fallback heuristic if model file not yet loaded
             calibrated_probs = np.clip((X["rain_1d_mm"] + X["api_mm"] * 0.2) / 140.0, 0.05, 0.98)
+
+        infer_latency_ms = round((time.perf_counter() - t0_infer) * 1000, 3)
+        green_cache.record_execution(inferences_count=len(wards), latency_ms=infer_latency_ms)
 
         # Assemble per-ward results
         ward_results = []
@@ -295,7 +359,7 @@ class WeatherInferenceService:
         # Sort by risk
         ward_results_sorted = sorted(ward_results, key=lambda x: x["calibrated_probability"], reverse=True)
 
-        return {
+        result_payload = {
             "execution_timestamp": datetime.utcnow().isoformat(),
             "telemetry": weather,
             "simulated_rain_override": override_rain_24h is not None,
@@ -307,3 +371,23 @@ class WeatherInferenceService:
             "top_risk_wards": ward_results_sorted[:10],
             "all_wards": ward_results
         }
+
+        # Store validated prediction in computation-aware cache
+        if use_cache:
+            green_cache.set(
+                cache_key,
+                result_payload,
+                model_inferences_count=len(wards),
+                uncached_latency_ms=infer_latency_ms
+            )
+
+        result_payload["green_computing"] = {
+            "cached": False,
+            "cache_hit": False,
+            "inference_skipped": False,
+            "inferences_executed": len(wards),
+            "inference_latency_ms": infer_latency_ms,
+            "cache_key_prefix": cache_key[:12]
+        }
+
+        return result_payload

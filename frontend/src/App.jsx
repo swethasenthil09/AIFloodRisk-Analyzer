@@ -12,7 +12,8 @@ import {
   CheckCircle2,
   ShieldAlert,
   Brain,
-  Zap
+  Zap,
+  Leaf
 } from 'lucide-react';
 
 import WardMap from './components/WardMap';
@@ -24,6 +25,7 @@ import AlertQueue from './components/AlertQueue';
 import SmsConsole from './components/SmsConsole';
 import LiveWeatherPanel from './components/LiveWeatherPanel';
 import ModelEvaluationPage from './components/ModelEvaluationPage';
+import GreenComputingDashboard from './components/GreenComputingDashboard';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('analyzer'); // 'analyzer', 'inundation', 'report', 'alerts', 'citizen'
@@ -351,6 +353,17 @@ export default function App() {
               <Brain size={15} />
               {isTa ? 'மாதிரி துல்லியம் & பயிற்சி/சோதனை' : 'Model Accuracy & Train/Test Data'}
             </button>
+            <button
+              className={`nav-pill ${activeTab === 'green' ? 'active' : ''}`}
+              onClick={() => setActiveTab('green')}
+              style={{
+                borderColor: activeTab === 'green' ? '#10b981' : undefined,
+                color: activeTab === 'green' ? '#34d399' : undefined
+              }}
+            >
+              <Leaf size={15} color={activeTab === 'green' ? '#34d399' : '#10b981'} />
+              {isTa ? 'பசுமை கணினி' : 'Green Computing'}
+            </button>
           </div>
 
           {/* Language Switcher */}
@@ -561,6 +574,11 @@ export default function App() {
         {/* TAB 6: MODEL EVALUATION & DATASET SPLIT (TRAIN VS TEST TOGGLE, ACCURACY, PREDICTIONS) */}
         {activeTab === 'evaluation' && (
           <ModelEvaluationPage language={language} />
+        )}
+
+        {/* TAB 7: DEDICATED GREEN COMPUTING & SUSTAINABLE AI DASHBOARD */}
+        {activeTab === 'green' && (
+          <GreenComputingDashboard language={language} />
         )}
       </main>
 
