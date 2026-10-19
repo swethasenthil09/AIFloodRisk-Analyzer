@@ -12,6 +12,7 @@ An end-to-end, real-time AI operational platform engineered for localized flood 
 ---
 
 ## 📌 System Architecture
+
 The platform decouples into two specialized operational paths:
 
 ```mermaid
