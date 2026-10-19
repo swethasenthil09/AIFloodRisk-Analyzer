@@ -1,0 +1,174 @@
+{
+  "models": {
+    "calibrated_xgboost": {
+      "precision": 0.8247,
+      "recall_pod": 0.1124,
+      "false_alarm_rate": 0.1753,
+      "f1_score": 0.1978,
+      "roc_auc": 0.9391,
+      "pr_auc": 0.2773,
+      "brier_score": 0.0145,
+      "confusion_matrix": {
+        "TN": 39671,
+        "FP": 17,
+        "FN": 632,
+        "TP": 80
+      }
+    },
+    "raw_xgboost": {
+      "precision": 0.8247,
+      "recall_pod": 0.1124,
+      "false_alarm_rate": 0.1753,
+      "f1_score": 0.1978,
+      "roc_auc": 0.9391,
+      "pr_auc": 0.2773,
+      "brier_score": 0.0145,
+      "confusion_matrix": {
+        "TN": 39671,
+        "FP": 17,
+        "FN": 632,
+        "TP": 80
+      }
+    },
+    "random_forest_baseline": {
+      "precision": 0.082,
+      "recall_pod": 0.9986,
+      "false_alarm_rate": 0.918,
+      "f1_score": 0.1516,
+      "roc_auc": 0.9636,
+      "pr_auc": 0.381,
+      "brier_score": 0.1071,
+      "confusion_matrix": {
+        "TN": 31730,
+        "FP": 7958,
+        "FN": 1,
+        "TP": 711
+      }
+    },
+    "rainfall_threshold_baseline": {
+      "precision": 1.0,
+      "recall_pod": 0.0295,
+      "false_alarm_rate": 0.0,
+      "f1_score": 0.0573,
+      "roc_auc": 0.5575,
+      "pr_auc": 0.074,
+      "brier_score": 0.0206,
+      "confusion_matrix": {
+        "TN": 39688,
+        "FP": 0,
+        "FN": 691,
+        "TP": 21
+      }
+    }
+  },
+  "calibration": {
+    "raw_curve": {
+      "prob_pred": [
+        0.0088535493564464,
+        0.13099842016139107,
+        0.23933056291181093,
+        0.32334603018620434,
+        0.591980000336965,
+        0.671079695224762,
+        0.7550614873568217,
+        0.8271911144256592,
+        0.9711772279861646
+      ],
+      "prob_true": [
+        0.009137266067869437,
+        0.17234468937875752,
+        0.15987460815047022,
+        0.14705882352941177,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.7083333333333334,
+        0.8421052631578947,
+        0.8974358974358975
+      ]
+    },
+    "calibrated_curve": {
+      "prob_pred": [
+        0.0088535493564464,
+        0.13099842016139107,
+        0.23933056291181093,
+        0.32334603018620434,
+        0.591980000336965,
+        0.671079695224762,
+        0.7550614873568217,
+        0.8271911144256592,
+        0.9711772279861646
+      ],
+      "prob_true": [
+        0.009137266067869437,
+        0.17234468937875752,
+        0.15987460815047022,
+        0.14705882352941177,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.7083333333333334,
+        0.8421052631578947,
+        0.8974358974358975
+      ]
+    },
+    "brier_improvement_percent": 0.0
+  },
+  "shap_feature_importance": [
+    {
+      "feature": "hand_m",
+      "importance": 1.746
+    },
+    {
+      "feature": "twi",
+      "importance": 0.5333
+    },
+    {
+      "feature": "rain_7d_mm",
+      "importance": 0.5187
+    },
+    {
+      "feature": "soil_moisture",
+      "importance": 0.3767
+    },
+    {
+      "feature": "api_mm",
+      "importance": 0.3502
+    },
+    {
+      "feature": "drainage_distance_m",
+      "importance": 0.1861
+    },
+    {
+      "feature": "rain_1d_mm",
+      "importance": 0.145
+    },
+    {
+      "feature": "drainage_cap_mmhr",
+      "importance": 0.1431
+    },
+    {
+      "feature": "elevation_m",
+      "importance": 0.0406
+    },
+    {
+      "feature": "rain_3d_mm",
+      "importance": 0.0229
+    },
+    {
+      "feature": "slope_deg",
+      "importance": 0.0076
+    }
+  ],
+  "feature_names": [
+    "rain_1d_mm",
+    "rain_3d_mm",
+    "rain_7d_mm",
+    "api_mm",
+    "soil_moisture",
+    "elevation_m",
+    "hand_m",
+    "twi",
+    "slope_deg",
+    "drainage_distance_m",
+    "drainage_cap_mmhr"
+  ]
+}
